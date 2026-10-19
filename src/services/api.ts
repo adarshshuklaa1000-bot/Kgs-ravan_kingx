@@ -130,8 +130,8 @@ async function safeFetch<T>(endpoint: string): Promise<T | null> {
 }
 
 export const kgsApi = {
-  // Fetch real courses list with high limit
-  async getCourses(page = 1, limit = 150): Promise<{ items: ApiCourseItem[]; total: number }> {
+  // Fetch real courses list with high limit (loads all 956 batches)
+  async getCourses(page = 1, limit = 1000): Promise<{ items: ApiCourseItem[]; total: number }> {
     const res = await safeFetch<any>(`/api/courses/?page_id=${page}&batch_id=0&limit=${limit}`);
     if (res && res.data) {
       if (Array.isArray(res.data)) {

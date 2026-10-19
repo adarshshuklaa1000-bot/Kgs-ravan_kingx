@@ -16,8 +16,8 @@ import { TelegramGateModal } from './components/TelegramGateModal';
 import { ScreenCenterAnnouncementModal } from './components/ScreenCenterAnnouncementModal';
 import { MaintenanceScreen } from './components/MaintenanceScreen';
 import { SecretAdminModal } from './components/SecretAdminModal';
+import { AboutSection } from './components/AboutSection';
 import { 
-  Sparkles, 
   RefreshCw, 
   BookOpen, 
   Video, 
@@ -25,7 +25,9 @@ import {
   GraduationCap, 
   Award,
   CheckCircle2,
-  ChevronDown
+  ChevronDown,
+  User,
+  Layers
 } from 'lucide-react';
 
 interface AdminConfig {
@@ -75,18 +77,19 @@ export default function App() {
   const lastTapTimeRef = useRef<number>(0);
   const [isSecretAdminOpen, setIsSecretAdminOpen] = useState<boolean>(false);
 
-  // Live Courses & Tests state (Supports loading ALL 950+ batches!)
+  // Live Courses & Tests state - ALL 956 BATCHES
   const [courses, setCourses] = useState<ApiCourseItem[]>([]);
   const [tests, setTests] = useState<ApiTestItem[]>([]);
   const [totalCourses, setTotalCourses] = useState<number>(0);
   const [totalTests, setTotalTests] = useState<number>(0);
-  const [currentPage, setCurrentPage] = useState<number>(1);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Progressive render limit for high-speed 60fps scrolling across all 956 batches
+  const [visibleLimit, setVisibleLimit] = useState<number>(36);
+
   // Navigation & Filter state
-  const [activeTab, setActiveTab] = useState<'courses' | 'tests'>('courses');
+  const [activeTab, setActiveTab] = useState<'courses' | 'tests' | 'about'>('courses');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCourse, setSelectedCourse] = useState<ApiCourseItem | null>(null);
@@ -122,22 +125,25 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch initial batches (limit 150 to load many batches right away!)
+  // Fetch ALL 956 batches on start!
   const loadInitialData = async () => {
     setIsLoading(true);
     setError(null);
     try {
       const [coursesResult, testsResult] = await Promise.all([
-        kgsApi.getCourses(1, 150),
+        kgsApi.getCourses(1, 1000), // Loads all 956 batches in 1 request
         kgsApi.getTests(1)
       ]);
 
-      setCourses(coursesResult.items);
-      setTotalCourses(coursesResult.total || 956);
-      setCurrentPage(1);
+      if (coursesResult && coursesResult.items && coursesResult.items.length > 0) {
+        setCourses(coursesResult.items);
+        setTotalCourses(coursesResult.total || coursesResult.items.length || 956);
+      }
 
-      setTests(testsResult.items);
-      setTotalTests(testsResult.total || testsResult.items.length);
+      if (testsResult && testsResult.items) {
+        setTests(testsResult.items);
+        setTotalTests(testsResult.total || testsResult.items.length);
+      }
     } catch (err: any) {
       console.error('Error fetching live KGS data:', err);
       setError('Unable to connect to live learning server. Please retry.');
@@ -146,32 +152,16 @@ export default function App() {
     }
   };
 
-  // Load more batches for pagination
-  const handleLoadMoreBatches = async () => {
-    if (isLoadingMore) return;
-    setIsLoadingMore(true);
-    const nextPage = currentPage + 1;
-    try {
-      const res = await kgsApi.getCourses(nextPage, 100);
-      if (res && res.items.length > 0) {
-        // Filter duplicates
-        const existingIds = new Set(courses.map(c => c.id));
-        const newItems = res.items.filter(c => !existingIds.has(c.id));
-        setCourses(prev => [...prev, ...newItems]);
-        setCurrentPage(nextPage);
-      }
-    } catch (err) {
-      console.error('Failed to load more batches:', err);
-    } finally {
-      setIsLoadingMore(false);
-    }
-  };
-
   useEffect(() => {
     loadInitialData();
   }, []);
 
-  // 5-Tap Logo Handler to open Secret Admin modal
+  // Reset visible limit whenever category or search query changes
+  useEffect(() => {
+    setVisibleLimit(36);
+  }, [categoryFilter, searchQuery]);
+
+  // 5-Tap Logo Handler to open Secret Admin modal (password: khushi)
   const handleLogoTap = () => {
     const now = Date.now();
     if (now - lastTapTimeRef.current < 1200) {
@@ -249,6 +239,8 @@ export default function App() {
 
     return matchesCategory && matchesSearch;
   });
+
+  const displayedCourses = filteredCourses.slice(0, visibleLimit);
 
   const filteredTests = tests.filter((test) => {
     return (
@@ -344,16 +336,20 @@ export default function App() {
           />
         ) : (
           <main className="flex-1 p-3 space-y-4 pb-24">
-            {/* Mobile Hero Announcement Card */}
+            {/* Mobile Hero Announcement Card - Completely Free of 'API' word */}
             <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 border border-slate-800 p-4 shadow-lg text-white">
               <div className="flex items-center justify-between mb-2">
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">
                   <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                  <span>KGS LIVE API</span>
+                  <span>Verified Official Batches</span>
                 </span>
-                <span className="text-[11px] font-mono font-black text-amber-400">
+                <button
+                  onClick={() => setActiveTab('about')}
+                  className="text-[11px] font-mono font-black text-amber-400 hover:underline cursor-pointer"
+                  title="About ravan_kingX"
+                >
                   ravan_kingx👑
-                </span>
+                </button>
               </div>
 
               <h2 className="text-base font-black text-white leading-tight">
@@ -376,8 +372,16 @@ export default function App() {
                 </button>
 
                 <button
+                  onClick={() => setActiveTab('about')}
+                  className="py-1.5 px-3 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-400/30 font-bold text-xs rounded-xl flex items-center gap-1 cursor-pointer"
+                >
+                  <span className="text-xs">👑</span>
+                  <span>About Me</span>
+                </button>
+
+                <button
                   onClick={() => window.open(adminConfig.telegramUrl || 'https://t.me/+g42TEGdV8HE3NWM1', '_blank')}
-                  className="py-1.5 px-3 bg-sky-500/20 hover:bg-sky-500/30 text-sky-400 border border-sky-400/30 font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
+                  className="py-1.5 px-3 bg-sky-500/20 hover:bg-sky-500/30 text-sky-400 border border-sky-400/30 font-bold text-xs rounded-xl flex items-center gap-1 cursor-pointer"
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>Telegram</span>
@@ -395,7 +399,7 @@ export default function App() {
               </div>
             )}
 
-            {/* TAB 1: ALL BATCHES */}
+            {/* TAB 1: ALL 956 BATCHES */}
             {activeTab === 'courses' && (
               <div className="space-y-3">
                 {/* Horizontal Category Scroller in English */}
@@ -425,22 +429,26 @@ export default function App() {
                 </div>
 
                 <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
-                  <span>Loaded: <strong className="text-white font-mono">{filteredCourses.length}</strong> of {totalCourses || 956} Batches</span>
-                  <span className="text-emerald-400 font-bold">Official CDN</span>
+                  <span>
+                    Showing <strong className="text-amber-400 font-mono font-bold">{displayedCourses.length}</strong> of{' '}
+                    <strong className="text-white font-mono">{filteredCourses.length}</strong>{' '}
+                    ({totalCourses || 956} Batches in Database)
+                  </span>
+                  <span className="text-emerald-400 font-bold">Verified Cloud Network</span>
                 </div>
 
                 {/* Loading indicator */}
                 {isLoading && (
                   <div className="py-20 text-center text-slate-400 flex flex-col items-center justify-center gap-2">
                     <RefreshCw className="w-7 h-7 text-amber-500 animate-spin" />
-                    <p className="text-xs">Loading live batches from server...</p>
+                    <p className="text-xs">Loading all batches and subjects...</p>
                   </div>
                 )}
 
-                {/* Courses List */}
+                {/* Courses List - All Batches available */}
                 {!isLoading && (
                   <div className="space-y-3">
-                    {filteredCourses.map((course) => (
+                    {displayedCourses.map((course) => (
                       <CourseCard
                         key={course.id}
                         course={course}
@@ -449,16 +457,23 @@ export default function App() {
                       />
                     ))}
 
-                    {/* Load More Batches Button */}
-                    {courses.length < totalCourses && (
-                      <div className="pt-2 text-center">
+                    {/* Smooth Batch Pagination / Show More Controls */}
+                    {displayedCourses.length < filteredCourses.length && (
+                      <div className="pt-2 flex flex-col gap-2 text-center">
                         <button
-                          onClick={handleLoadMoreBatches}
-                          disabled={isLoadingMore}
-                          className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-amber-400 font-bold text-xs rounded-2xl border border-slate-800 flex items-center justify-center gap-2 shadow cursor-pointer transition-all active:scale-98 disabled:opacity-50"
+                          onClick={() => setVisibleLimit(prev => Math.min(prev + 40, filteredCourses.length))}
+                          className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-amber-400 font-bold text-xs rounded-2xl border border-slate-800 flex items-center justify-center gap-2 shadow cursor-pointer transition-all active:scale-98"
                         >
-                          <ChevronDown className={`w-4 h-4 ${isLoadingMore ? 'animate-bounce' : ''}`} />
-                          <span>{isLoadingMore ? 'Fetching Next Batch Page...' : `Load More Batches (Page ${currentPage + 1})`}</span>
+                          <ChevronDown className="w-4 h-4 animate-bounce" />
+                          <span>Show Next 40 Batches ({displayedCourses.length} of {filteredCourses.length})</span>
+                        </button>
+
+                        <button
+                          onClick={() => setVisibleLimit(filteredCourses.length)}
+                          className="w-full py-2 px-4 bg-slate-950 hover:bg-slate-900 text-slate-400 hover:text-white font-medium text-[11px] rounded-xl border border-slate-800/60 flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <Layers className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Show All {filteredCourses.length} Batches At Once</span>
                         </button>
                       </div>
                     )}
@@ -516,6 +531,18 @@ export default function App() {
                 )}
               </div>
             )}
+
+            {/* TAB 3: ABOUT ME (ENGLISH SECTION ABOUT ravan_kingX) */}
+            {activeTab === 'about' && (
+              <AboutSection
+                telegramUrl={adminConfig.telegramUrl}
+                onOpenBatches={() => {
+                  setActiveTab('courses');
+                  setSelectedCourse(null);
+                }}
+                onLogoTap={handleLogoTap}
+              />
+            )}
           </main>
         )}
 
@@ -557,6 +584,19 @@ export default function App() {
           >
             <Award className="w-5 h-5" />
             <span className="text-[10px] font-bold">Test Series</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab('about');
+              setSelectedCourse(null);
+            }}
+            className={`flex flex-col items-center gap-1 cursor-pointer transition-colors ${
+              activeTab === 'about' ? 'text-amber-400' : 'text-slate-400'
+            }`}
+          >
+            <span className="text-base leading-none">👑</span>
+            <span className="text-[10px] font-bold">About Me</span>
           </button>
 
           <button

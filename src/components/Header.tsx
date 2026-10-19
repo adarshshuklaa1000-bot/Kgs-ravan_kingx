@@ -11,8 +11,8 @@ import {
 interface HeaderProps {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
-  activeTab: 'courses' | 'tests';
-  setActiveTab: (tab: 'courses' | 'tests') => void;
+  activeTab: 'courses' | 'tests' | 'about';
+  setActiveTab: (tab: 'courses' | 'tests' | 'about') => void;
   onRefresh: () => void;
   isLoading: boolean;
   coursesCount: number;
@@ -41,11 +41,15 @@ export const Header: React.FC<HeaderProps> = ({
           <Sparkles className="w-3 h-3 animate-pulse" />
           <span>KGS OFFICIAL APP</span>
         </span>
-        <span className="font-mono text-[10px] tracking-wide">
+        <button 
+          onClick={() => setActiveTab('about')}
+          className="font-mono text-[10px] tracking-wide cursor-pointer hover:underline transition-all"
+          title="About Developer ravan_kingX"
+        >
           <span className="text-slate-900 font-bold">Powered by </span>
           <span className="text-white font-black">ravan_</span>
           <span className="text-slate-950 font-black">kingX👑</span>
-        </span>
+        </button>
       </div>
 
       {/* Main Bar */}
@@ -122,26 +126,38 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center gap-1.5 w-full">
           <button
             onClick={() => setActiveTab('courses')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`flex-[1.2] flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer truncate ${
               activeTab === 'courses'
                 ? 'bg-amber-500 text-slate-950 shadow-sm'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            <GraduationCap className="w-3.5 h-3.5" />
-            <span>All Batches ({coursesCount})</span>
+            <GraduationCap className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">Batches ({coursesCount})</span>
           </button>
 
           <button
             onClick={() => setActiveTab('tests')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer truncate ${
               activeTab === 'tests'
                 ? 'bg-amber-500 text-slate-950 shadow-sm'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            <Award className="w-3.5 h-3.5" />
-            <span>Test Series ({testsCount})</span>
+            <Award className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">Tests ({testsCount})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('about')}
+            className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer truncate ${
+              activeTab === 'about'
+                ? 'bg-amber-500 text-slate-950 shadow-sm'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <span className="text-xs">👑</span>
+            <span className="truncate">About Me</span>
           </button>
         </div>
       </div>

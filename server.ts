@@ -91,9 +91,18 @@ app.post('/api/admin/update-config', (req, res) => {
   res.json({ success: true, config });
 });
 
-// 4. Upstream KGS proxy fallback
+// In-memory cache for fast course delivery
+let coursesCache: { data: string; timestamp: number } | null = null;
+
+// 4. Upstream KGS proxy with caching for all 956 courses
 app.use('/api', async (req, res, next) => {
   try {
+    const isCoursesRequest = req.url.startsWith('/courses');
+    // Serve from cache if courses request and fresh (within 30 mins)
+    if (isCoursesRequest && coursesCache && (Date.now() - coursesCache.timestamp < 30 * 60 * 1000)) {
+      return res.set('Content-Type', 'application/json').send(coursesCache.data);
+    }
+
     const upstreamUrl = `https://apicf.udemylover.workers.dev/api${req.url}`;
     const fetchRes = await fetch(upstreamUrl, {
       method: req.method,
@@ -102,10 +111,19 @@ app.use('/api', async (req, res, next) => {
       }
     });
     const data = await fetchRes.text();
+    
+    // Cache successful courses response
+    if (isCoursesRequest && fetchRes.ok) {
+      coursesCache = { data, timestamp: Date.now() };
+    }
+
     res.status(fetchRes.status)
        .set('Content-Type', fetchRes.headers.get('content-type') || 'application/json')
        .send(data);
   } catch (err) {
+    if (coursesCache && req.url.startsWith('/courses')) {
+      return res.set('Content-Type', 'application/json').send(coursesCache.data);
+    }
     next(err);
   }
 });
