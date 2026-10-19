@@ -91,16 +91,17 @@ app.post('/api/admin/update-config', (req, res) => {
   res.json({ success: true, config });
 });
 
-// In-memory cache for fast course delivery
-let coursesCache: { data: string; timestamp: number } | null = null;
+// In-memory cache for fast delivery keyed by exact URL
+const proxyCache = new Map<string, { data: string; contentType: string; timestamp: number }>();
 
-// 4. Upstream KGS proxy with caching for all 956 courses
+// 4. Upstream KGS proxy with exact URL caching
 app.use('/api', async (req, res, next) => {
   try {
-    const isCoursesRequest = req.url.startsWith('/courses');
-    // Serve from cache if courses request and fresh (within 30 mins)
-    if (isCoursesRequest && coursesCache && (Date.now() - coursesCache.timestamp < 30 * 60 * 1000)) {
-      return res.set('Content-Type', 'application/json').send(coursesCache.data);
+    const cacheKey = `${req.method}:${req.url}`;
+    const cached = proxyCache.get(cacheKey);
+    // Serve from cache if fresh (15 mins)
+    if (req.method === 'GET' && cached && (Date.now() - cached.timestamp < 15 * 60 * 1000)) {
+      return res.set('Content-Type', cached.contentType).send(cached.data);
     }
 
     const upstreamUrl = `https://apicf.udemylover.workers.dev/api${req.url}`;
@@ -110,19 +111,22 @@ app.use('/api', async (req, res, next) => {
         'Accept': 'application/json, text/plain, */*'
       }
     });
+    const contentType = fetchRes.headers.get('content-type') || 'application/json';
     const data = await fetchRes.text();
     
-    // Cache successful courses response
-    if (isCoursesRequest && fetchRes.ok) {
-      coursesCache = { data, timestamp: Date.now() };
+    // Cache successful GET responses
+    if (req.method === 'GET' && fetchRes.ok && data.length > 0) {
+      proxyCache.set(cacheKey, { data, contentType, timestamp: Date.now() });
     }
 
     res.status(fetchRes.status)
-       .set('Content-Type', fetchRes.headers.get('content-type') || 'application/json')
+       .set('Content-Type', contentType)
        .send(data);
   } catch (err) {
-    if (coursesCache && req.url.startsWith('/courses')) {
-      return res.set('Content-Type', 'application/json').send(coursesCache.data);
+    const cacheKey = `${req.method}:${req.url}`;
+    const cached = proxyCache.get(cacheKey);
+    if (cached) {
+      return res.set('Content-Type', cached.contentType).send(cached.data);
     }
     next(err);
   }
