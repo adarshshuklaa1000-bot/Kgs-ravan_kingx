@@ -1,0 +1,14 @@
+{
+  "maintenanceMode": false,
+  "maintenanceMessage": "वेबसाइट अभी रखरखाव (Maintenance) में है। जल्द ही पुनः चालू होगी।",
+  "announcement": {
+    "enabled": false,
+    "id": "1",
+    "title": "विशेष आवश्यक सूचना 📢",
+    "message": "सभी छात्र तुरंत हमारे आधिकारिक टेलीग्राम चैनल से जुड़ें।",
+    "badge": "LIVE ALERT"
+  },
+  "telegramUrl": "https://t.me/+g42TEGdV8HE3NWM1",
+  "adminPassword": "khushi",
+  "updatedAt": 1792383390776
+}

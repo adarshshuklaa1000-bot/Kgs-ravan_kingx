@@ -1,0 +1,6 @@
+{
+  "name": "Khan Global Studies - Batches, Video & PDF Portal",
+  "description": "Khan Global Studies batches portal with video lecture player and interactive PDF study notes viewer.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

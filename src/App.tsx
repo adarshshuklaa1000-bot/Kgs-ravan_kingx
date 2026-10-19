@@ -1,0 +1,594 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  ApiCourseItem, 
+  ApiTestItem, 
+  ApiVideoItem, 
+  kgsApi 
+} from './services/api';
+import { Header } from './components/Header';
+import { CourseCard } from './components/CourseCard';
+import { TestSeriesCard } from './components/TestSeriesCard';
+import { CourseDetailView } from './components/CourseDetailView';
+import { VideoPlayerModal } from './components/VideoPlayerModal';
+import { PdfViewerModal } from './components/PdfViewerModal';
+import { SplashScreen } from './components/SplashScreen';
+import { TelegramGateModal } from './components/TelegramGateModal';
+import { ScreenCenterAnnouncementModal } from './components/ScreenCenterAnnouncementModal';
+import { MaintenanceScreen } from './components/MaintenanceScreen';
+import { SecretAdminModal } from './components/SecretAdminModal';
+import { 
+  Sparkles, 
+  RefreshCw, 
+  BookOpen, 
+  Video, 
+  Send, 
+  GraduationCap, 
+  Award,
+  CheckCircle2,
+  ChevronDown
+} from 'lucide-react';
+
+interface AdminConfig {
+  maintenanceMode: boolean;
+  maintenanceMessage: string;
+  announcement: {
+    enabled: boolean;
+    id: string;
+    title: string;
+    message: string;
+    badge: string;
+  };
+  telegramUrl: string;
+  updatedAt?: number;
+}
+
+export default function App() {
+  // Splash & Verification state
+  const [showSplash, setShowSplash] = useState<boolean>(true);
+  const [isTelegramVerified, setIsTelegramVerified] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('kgs_tg_verified_ravan_kingx') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  // Admin remote real-time config state
+  const [adminConfig, setAdminConfig] = useState<AdminConfig>({
+    maintenanceMode: false,
+    maintenanceMessage: 'System maintenance in progress. Please check back shortly.',
+    announcement: {
+      enabled: false,
+      id: '1',
+      title: 'Khan Sir Special Notice 📢',
+      message: 'Join our official Telegram community for daily notes and live updates!',
+      badge: 'OFFICIAL ALERT'
+    },
+    telegramUrl: 'https://t.me/+g42TEGdV8HE3NWM1'
+  });
+
+  // Center screen announcement state
+  const [dismissedAnnouncements, setDismissedAnnouncements] = useState<string[]>([]);
+
+  // 5-tap Secret Admin Trigger state
+  const [logoTapCount, setLogoTapCount] = useState<number>(0);
+  const lastTapTimeRef = useRef<number>(0);
+  const [isSecretAdminOpen, setIsSecretAdminOpen] = useState<boolean>(false);
+
+  // Live Courses & Tests state (Supports loading ALL 950+ batches!)
+  const [courses, setCourses] = useState<ApiCourseItem[]>([]);
+  const [tests, setTests] = useState<ApiTestItem[]>([]);
+  const [totalCourses, setTotalCourses] = useState<number>(0);
+  const [totalTests, setTotalTests] = useState<number>(0);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Navigation & Filter state
+  const [activeTab, setActiveTab] = useState<'courses' | 'tests'>('courses');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedCourse, setSelectedCourse] = useState<ApiCourseItem | null>(null);
+
+  // Modals for Video and PDF
+  const [activeVideo, setActiveVideo] = useState<{
+    videoItem: ApiVideoItem;
+    course: ApiCourseItem;
+  } | null>(null);
+
+  const [activePdf, setActivePdf] = useState<{
+    title: string;
+    url: string;
+    courseTitle?: string;
+  } | null>(null);
+
+  // Poll Admin Config from server for real-time synchronization across all visitors
+  const fetchAdminConfig = async () => {
+    try {
+      const res = await fetch('/api/admin/config');
+      if (res.ok) {
+        const data = await res.json();
+        setAdminConfig(data);
+      }
+    } catch {
+      // Local fallback
+    }
+  };
+
+  useEffect(() => {
+    fetchAdminConfig();
+    const interval = setInterval(fetchAdminConfig, 3500);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fetch initial batches (limit 150 to load many batches right away!)
+  const loadInitialData = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [coursesResult, testsResult] = await Promise.all([
+        kgsApi.getCourses(1, 150),
+        kgsApi.getTests(1)
+      ]);
+
+      setCourses(coursesResult.items);
+      setTotalCourses(coursesResult.total || 956);
+      setCurrentPage(1);
+
+      setTests(testsResult.items);
+      setTotalTests(testsResult.total || testsResult.items.length);
+    } catch (err: any) {
+      console.error('Error fetching live KGS data:', err);
+      setError('Unable to connect to live learning server. Please retry.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Load more batches for pagination
+  const handleLoadMoreBatches = async () => {
+    if (isLoadingMore) return;
+    setIsLoadingMore(true);
+    const nextPage = currentPage + 1;
+    try {
+      const res = await kgsApi.getCourses(nextPage, 100);
+      if (res && res.items.length > 0) {
+        // Filter duplicates
+        const existingIds = new Set(courses.map(c => c.id));
+        const newItems = res.items.filter(c => !existingIds.has(c.id));
+        setCourses(prev => [...prev, ...newItems]);
+        setCurrentPage(nextPage);
+      }
+    } catch (err) {
+      console.error('Failed to load more batches:', err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    loadInitialData();
+  }, []);
+
+  // 5-Tap Logo Handler to open Secret Admin modal
+  const handleLogoTap = () => {
+    const now = Date.now();
+    if (now - lastTapTimeRef.current < 1200) {
+      const newCount = logoTapCount + 1;
+      setLogoTapCount(newCount);
+      if (newCount >= 5) {
+        setIsSecretAdminOpen(true);
+        setLogoTapCount(0);
+      }
+    } else {
+      setLogoTapCount(1);
+    }
+    lastTapTimeRef.current = now;
+  };
+
+  // Save admin config updates to server
+  const handleSaveAdminConfig = async (updates: any, newPassword?: string): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/admin/update-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: 'ravan_kingx_admin_token',
+          updates,
+          newPassword
+        })
+      });
+      if (res.ok) {
+        await fetchAdminConfig();
+        return true;
+      }
+    } catch (err) {
+      console.error('Error updating config on server:', err);
+    }
+    return false;
+  };
+
+  // Quick Play handler
+  const handleQuickPlay = async (course: ApiCourseItem) => {
+    try {
+      const details = await kgsApi.getCourseDetails(course.slug);
+      if (details && details.classrooms && details.classrooms.length > 0) {
+        const clsId = details.classrooms[0].id;
+        const clsContent = await kgsApi.getClassroom(course.id, clsId);
+        if (clsContent && clsContent.videos && clsContent.videos.length > 0) {
+          setActiveVideo({
+            videoItem: clsContent.videos[0],
+            course: course
+          });
+          return;
+        }
+      }
+      setSelectedCourse(course);
+    } catch {
+      setSelectedCourse(course);
+    }
+  };
+
+  // Filter courses in pure English
+  const filteredCourses = courses.filter((c) => {
+    const t = c.title.toLowerCase();
+    let matchesCategory = true;
+    if (categoryFilter === 'bpsc') matchesCategory = t.includes('bpsc') || t.includes('bihar');
+    else if (categoryFilter === 'upsc') matchesCategory = t.includes('upsc') || t.includes('ias');
+    else if (categoryFilter === 'ssc_railway') matchesCategory = t.includes('ssc') || t.includes('railway') || t.includes('rrb') || t.includes('alp') || t.includes('je');
+    else if (categoryFilter === 'math') matchesCategory = t.includes('math') || t.includes('गणित');
+    else if (categoryFilter === 'teaching') matchesCategory = t.includes('tre') || t.includes('tet') || t.includes('bstet');
+    else if (categoryFilter === 'tech') matchesCategory = t.includes('ai') || t.includes('marketing') || t.includes('developer') || t.includes('web');
+    else if (categoryFilter === 'defence') matchesCategory = t.includes('defence') || t.includes('nda') || t.includes('cds');
+
+    const matchesSearch = 
+      c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.id.toString().includes(searchQuery.toLowerCase()) ||
+      c.slug.toLowerCase().includes(searchQuery.toLowerCase());
+
+    return matchesCategory && matchesSearch;
+  });
+
+  const filteredTests = tests.filter((test) => {
+    return (
+      test.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      test.id.toString().includes(searchQuery.toLowerCase())
+    );
+  });
+
+  // Announcement check
+  const isAnnouncementActive = 
+    adminConfig.announcement?.enabled && 
+    adminConfig.announcement?.message && 
+    !dismissedAnnouncements.includes(adminConfig.announcement.id || '1');
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between font-sans selection:bg-amber-500 selection:text-slate-950">
+      {/* 1. Animated Splash Screen on Load with VERY BIG ravan_kingX */}
+      {showSplash && (
+        <SplashScreen 
+          onFinish={() => setShowSplash(false)} 
+          isLoadingData={isLoading} 
+        />
+      )}
+
+      {/* 2. Maintenance Screen (Remote Controlled) */}
+      {adminConfig.maintenanceMode && (
+        <MaintenanceScreen
+          message={adminConfig.maintenanceMessage}
+          onLogoTap={handleLogoTap}
+          onRefresh={fetchAdminConfig}
+        />
+      )}
+
+      {/* 3. Mandatory Telegram Join Gate with Automatic Verification */}
+      {!showSplash && !isTelegramVerified && (
+        <TelegramGateModal
+          isOpen={true}
+          telegramUrl={adminConfig.telegramUrl || 'https://t.me/+g42TEGdV8HE3NWM1'}
+          onVerified={() => setIsTelegramVerified(true)}
+        />
+      )}
+
+      {/* 4. Screen-Center Animated Announcement Popup */}
+      {!showSplash && isAnnouncementActive && (
+        <ScreenCenterAnnouncementModal
+          isOpen={true}
+          announcement={adminConfig.announcement}
+          onClose={() => {
+            setDismissedAnnouncements(prev => [...prev, adminConfig.announcement.id || '1']);
+          }}
+        />
+      )}
+
+      {/* 5. Secret Admin Panel Modal (5 Taps on Logo) */}
+      <SecretAdminModal
+        isOpen={isSecretAdminOpen}
+        onClose={() => setIsSecretAdminOpen(false)}
+        config={adminConfig}
+        onSaveConfig={handleSaveAdminConfig}
+      />
+
+      {/* MAIN APPLICATION - MOBILE-ONLY VIEWPORT CONTAINER */}
+      <div className="w-full max-w-md mx-auto min-h-screen bg-slate-950 border-x border-slate-800/80 shadow-2xl flex flex-col justify-between relative">
+        {/* Mobile Header with 5-tap trigger */}
+        <Header
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          activeTab={activeTab}
+          setActiveTab={(tab) => {
+            setActiveTab(tab);
+            setSelectedCourse(null);
+          }}
+          onRefresh={loadInitialData}
+          isLoading={isLoading}
+          coursesCount={totalCourses || courses.length}
+          testsCount={totalTests || tests.length}
+          onLogoTap={handleLogoTap}
+          onOpenTelegram={() => window.open(adminConfig.telegramUrl || 'https://t.me/+g42TEGdV8HE3NWM1', '_blank')}
+        />
+
+        {/* View Switcher: Course Details (Subject -> Chapter -> Video/PDF) or Main Dashboard */}
+        {selectedCourse ? (
+          <CourseDetailView
+            course={selectedCourse}
+            onBack={() => setSelectedCourse(null)}
+            onPlayVideo={(videoItem, courseItem) => {
+              setActiveVideo({ videoItem, course: courseItem });
+            }}
+            onOpenPdf={(pdf, courseTitle) => {
+              setActivePdf({ ...pdf, courseTitle });
+            }}
+            onLogoTap={handleLogoTap}
+          />
+        ) : (
+          <main className="flex-1 p-3 space-y-4 pb-24">
+            {/* Mobile Hero Announcement Card */}
+            <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 border border-slate-800 p-4 shadow-lg text-white">
+              <div className="flex items-center justify-between mb-2">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                  <span>KGS LIVE API</span>
+                </span>
+                <span className="text-[11px] font-mono font-black text-amber-400">
+                  ravan_kingx👑
+                </span>
+              </div>
+
+              <h2 className="text-base font-black text-white leading-tight">
+                All Active Batches & Classrooms
+              </h2>
+              <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
+                Official courses by Khan Sir & India's top educators. Access full subject lists, chapter videos, and companion PDF notes.
+              </p>
+
+              {/* Quick Action buttons in English */}
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    if (courses.length > 0) handleQuickPlay(courses[0]);
+                  }}
+                  className="flex-1 py-1.5 px-3 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 text-white font-bold text-xs rounded-xl shadow flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <Video className="w-3.5 h-3.5" />
+                  <span>Start First Class</span>
+                </button>
+
+                <button
+                  onClick={() => window.open(adminConfig.telegramUrl || 'https://t.me/+g42TEGdV8HE3NWM1', '_blank')}
+                  className="py-1.5 px-3 bg-sky-500/20 hover:bg-sky-500/30 text-sky-400 border border-sky-400/30 font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Telegram</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Error banner if network fails */}
+            {error && (
+              <div className="p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs flex items-center justify-between">
+                <span>{error}</span>
+                <button onClick={loadInitialData} className="underline font-bold cursor-pointer">
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {/* TAB 1: ALL BATCHES */}
+            {activeTab === 'courses' && (
+              <div className="space-y-3">
+                {/* Horizontal Category Scroller in English */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                  {[
+                    { id: 'all', label: 'All Batches' },
+                    { id: 'bpsc', label: 'BPSC / State PCS' },
+                    { id: 'upsc', label: 'UPSC / IAS' },
+                    { id: 'ssc_railway', label: 'SSC & Railway' },
+                    { id: 'math', label: 'Maths Foundation' },
+                    { id: 'teaching', label: 'Teaching (TRE)' },
+                    { id: 'tech', label: 'Tech & AI' },
+                    { id: 'defence', label: 'Defence Forces' }
+                  ].map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setCategoryFilter(cat.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                        categoryFilter === cat.id
+                          ? 'bg-amber-500 text-slate-950 font-black shadow'
+                          : 'bg-slate-900 text-slate-400 border border-slate-800'
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
+                  <span>Loaded: <strong className="text-white font-mono">{filteredCourses.length}</strong> of {totalCourses || 956} Batches</span>
+                  <span className="text-emerald-400 font-bold">Official CDN</span>
+                </div>
+
+                {/* Loading indicator */}
+                {isLoading && (
+                  <div className="py-20 text-center text-slate-400 flex flex-col items-center justify-center gap-2">
+                    <RefreshCw className="w-7 h-7 text-amber-500 animate-spin" />
+                    <p className="text-xs">Loading live batches from server...</p>
+                  </div>
+                )}
+
+                {/* Courses List */}
+                {!isLoading && (
+                  <div className="space-y-3">
+                    {filteredCourses.map((course) => (
+                      <CourseCard
+                        key={course.id}
+                        course={course}
+                        onSelectCourse={(c) => setSelectedCourse(c)}
+                        onQuickPlay={handleQuickPlay}
+                      />
+                    ))}
+
+                    {/* Load More Batches Button */}
+                    {courses.length < totalCourses && (
+                      <div className="pt-2 text-center">
+                        <button
+                          onClick={handleLoadMoreBatches}
+                          disabled={isLoadingMore}
+                          className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-amber-400 font-bold text-xs rounded-2xl border border-slate-800 flex items-center justify-center gap-2 shadow cursor-pointer transition-all active:scale-98 disabled:opacity-50"
+                        >
+                          <ChevronDown className={`w-4 h-4 ${isLoadingMore ? 'animate-bounce' : ''}`} />
+                          <span>{isLoadingMore ? 'Fetching Next Batch Page...' : `Load More Batches (Page ${currentPage + 1})`}</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Empty state */}
+                {!isLoading && filteredCourses.length === 0 && (
+                  <div className="p-10 text-center bg-slate-900 rounded-2xl border border-slate-800">
+                    <BookOpen className="w-10 h-10 text-slate-600 mx-auto mb-2" />
+                    <h4 className="text-sm font-bold text-white">No batches found</h4>
+                    <p className="text-xs text-slate-400 mt-1">Try resetting search filters.</p>
+                    <button
+                      onClick={() => { setCategoryFilter('all'); setSearchQuery(''); }}
+                      className="mt-3 px-3.5 py-1.5 bg-amber-500 text-slate-950 font-bold text-xs rounded-xl cursor-pointer"
+                    >
+                      View All Batches
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 2: TEST SERIES */}
+            {activeTab === 'tests' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between px-1">
+                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                    Official Online Test Series
+                  </h3>
+                  <span className="text-[11px] text-slate-400 font-mono">
+                    Total: {filteredTests.length}
+                  </span>
+                </div>
+
+                {isLoading && (
+                  <div className="py-20 text-center text-slate-400 flex flex-col items-center justify-center gap-2">
+                    <RefreshCw className="w-7 h-7 text-amber-500 animate-spin" />
+                    <p className="text-xs">Loading test series...</p>
+                  </div>
+                )}
+
+                {!isLoading && (
+                  <div className="space-y-3">
+                    {filteredTests.map((test) => (
+                      <TestSeriesCard
+                        key={test.id}
+                        test={test}
+                        onOpenTest={(t) => {
+                          window.open(`https://khanglobalstudies.com/test-series/${t.slug}`, '_blank');
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </main>
+        )}
+
+        {/* Mandatory Signature Footer with PROMINENT ravan_kingX */}
+        <footer className="bg-slate-950 border-t border-slate-800 py-3 px-4 text-center shrink-0">
+          <p className="text-xs tracking-wider">
+            <span className="text-slate-400 font-medium">Powered by </span>
+            <span className="text-white font-black tracking-wide">ravan_</span>
+            <span className="text-amber-400 font-black tracking-wide">kingX👑</span>
+          </p>
+          <p className="text-[10px] text-slate-500 mt-0.5">
+            Khan Global Studies Official Mobile Portal
+          </p>
+        </footer>
+
+        {/* Mobile Bottom Floating Navigation Bar in English */}
+        <div className="fixed bottom-0 inset-x-0 max-w-md mx-auto bg-slate-950/95 backdrop-blur-lg border-t border-slate-800 flex items-center justify-around py-2 z-40 px-2">
+          <button
+            onClick={() => {
+              setActiveTab('courses');
+              setSelectedCourse(null);
+            }}
+            className={`flex flex-col items-center gap-1 cursor-pointer transition-colors ${
+              activeTab === 'courses' && !selectedCourse ? 'text-amber-400' : 'text-slate-400'
+            }`}
+          >
+            <GraduationCap className="w-5 h-5" />
+            <span className="text-[10px] font-bold">Batches</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab('tests');
+              setSelectedCourse(null);
+            }}
+            className={`flex flex-col items-center gap-1 cursor-pointer transition-colors ${
+              activeTab === 'tests' ? 'text-amber-400' : 'text-slate-400'
+            }`}
+          >
+            <Award className="w-5 h-5" />
+            <span className="text-[10px] font-bold">Test Series</span>
+          </button>
+
+          <button
+            onClick={() => window.open(adminConfig.telegramUrl || 'https://t.me/+g42TEGdV8HE3NWM1', '_blank')}
+            className="flex flex-col items-center gap-1 text-sky-400 cursor-pointer"
+          >
+            <Send className="w-5 h-5" />
+            <span className="text-[10px] font-bold">Telegram</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Video Player Modal */}
+      {activeVideo && (
+        <VideoPlayerModal
+          videoItem={activeVideo.videoItem}
+          course={activeVideo.course}
+          onClose={() => setActiveVideo(null)}
+          onOpenPdf={(pdf, courseTitle) => {
+            setActivePdf({ ...pdf, courseTitle });
+          }}
+        />
+      )}
+
+      {/* PDF Document Viewer Modal */}
+      {activePdf && (
+        <PdfViewerModal
+          pdf={{ title: activePdf.title, url: activePdf.url }}
+          courseTitle={activePdf.courseTitle}
+          onClose={() => setActivePdf(null)}
+        />
+      )}
+    </div>
+  );
+}
