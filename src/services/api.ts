@@ -80,6 +80,8 @@ export interface ApiVideoDetail {
   mp4s: Record<string, string> | any[] | null;
   video_url?: string;
   hd_video_url?: string;
+  stream_url?: string;
+  hd_stream_url?: string;
   download_url?: string;
 }
 
@@ -96,31 +98,42 @@ export interface ApiTestItem {
   expired_at: string;
 }
 
+import { createGuardHeaders, decryptVaultPayload } from '../utils/security';
+
 const UPSTREAM_URL = 'https://apicf.udemylover.workers.dev';
 
 async function safeFetch<T>(endpoint: string): Promise<T | null> {
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const guardHeaders = createGuardHeaders(cleanEndpoint);
 
-  // Attempt 1: Local /api proxy
+  // Attempt 1: Local /api proxy with Military Client Guard & AES Vault Decryption
   try {
     const res = await fetch(cleanEndpoint, {
-      headers: { Accept: 'application/json, text/plain, */*' }
+      headers: {
+        Accept: 'application/json, text/plain, */*',
+        ...guardHeaders
+      }
     });
     if (res.ok) {
-      return await res.json();
+      const json = await res.json();
+      return decryptVaultPayload<T>(json);
     }
   } catch {
-    // Fallback to direct upstream
+    // Fallback if local server proxy is unreachable
   }
 
-  // Attempt 2: Direct upstream workers URL
+  // Attempt 2: Direct upstream workers URL fallback
   try {
     const directUrl = `${UPSTREAM_URL}${cleanEndpoint}`;
     const res = await fetch(directUrl, {
-      headers: { Accept: 'application/json, text/plain, */*' }
+      headers: {
+        Accept: 'application/json, text/plain, */*',
+        ...guardHeaders
+      }
     });
     if (res.ok) {
-      return await res.json();
+      const json = await res.json();
+      return decryptVaultPayload<T>(json);
     }
   } catch (err) {
     console.error('Direct API fetch failed:', err);

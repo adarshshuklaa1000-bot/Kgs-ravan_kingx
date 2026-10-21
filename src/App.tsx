@@ -17,7 +17,10 @@ import { ScreenCenterAnnouncementModal } from './components/ScreenCenterAnnounce
 import { MaintenanceScreen } from './components/MaintenanceScreen';
 import { SecretAdminModal } from './components/SecretAdminModal';
 import { AboutSection } from './components/AboutSection';
+import { initAntiInspectArmor } from './utils/security';
 import { 
+  ShieldCheck,
+  Lock,
   RefreshCw, 
   BookOpen, 
   Video, 
@@ -153,6 +156,7 @@ export default function App() {
   };
 
   useEffect(() => {
+    initAntiInspectArmor();
     loadInitialData();
   }, []);
 
@@ -358,6 +362,12 @@ export default function App() {
               <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
                 Official courses by Khan Sir & India's top educators. Access full subject lists, chapter videos, and companion PDF notes.
               </p>
+
+              {/* Military-Grade Privacy Shield Badge */}
+              <div className="mt-2.5 flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-300 text-[10px] font-bold">
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>Military Guard Active: HMAC Client Guard &amp; AES-256 Vault Shield</span>
+              </div>
 
               {/* Quick Action buttons in English */}
               <div className="mt-3 flex items-center gap-2">

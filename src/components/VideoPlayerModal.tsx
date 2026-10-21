@@ -98,8 +98,9 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   // Smart Stream Resolver (Solves broken / Play Console dummy URLs)
   const ytId = extractYoutubeId(videoDetails?.hd_video_url) || extractYoutubeId(videoDetails?.video_url);
 
-  let directMp4Url: string | null = null;
-  if (videoDetails?.mp4s && typeof videoDetails.mp4s === 'object') {
+  const tokenizedStreamUrl = videoDetails?.stream_url || videoDetails?.hd_stream_url || null;
+  let directMp4Url: string | null = tokenizedStreamUrl;
+  if (!directMp4Url && videoDetails?.mp4s && typeof videoDetails.mp4s === 'object') {
     const mp4Map = videoDetails.mp4s as Record<string, string>;
     directMp4Url = mp4Map[quality] || mp4Map['720p'] || mp4Map['480p'] || mp4Map['360p'] || Object.values(mp4Map)[0] || null;
   }
