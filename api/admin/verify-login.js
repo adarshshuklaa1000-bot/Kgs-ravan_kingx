@@ -31,5 +31,5 @@ export default function handler(req, res) {
     });
   }
 
-  return res.status(401).json({ success: false, message: 'गलत पासवर्ड! (Default: khushi)' });
+  return res.status(401).json({ success: false, message: 'गलत पासवर्ड!' });
 }

@@ -117,7 +117,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({
     if (cleanInput === localPass || cleanInput === 'khushi') {
       setIsAuthenticated(true);
     } else {
-      setLoginError('Incorrect passcode! Default master passcode is: khushi');
+      setLoginError('Incorrect passcode. Please try again.');
     }
     setIsLoggingIn(false);
   };
@@ -154,8 +154,20 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({
         localStorage.setItem('kgs_admin_pass', newPassword.trim());
         setNewPassword('');
       }
-      setSaveSuccess('⚡ Broadcasted LIVE to ALL visitors instantly!');
-      setTimeout(() => setSaveSuccess(null), 3500);
+
+      if (targetMaintenance) {
+        setSaveSuccess('🔴 Portal is now LOCKED. Closing in 1s to view maintenance screen...');
+        setTimeout(() => onClose(), 1200);
+      } else if (forceNewAnnouncementId || targetAnnouncementEnabled) {
+        setSaveSuccess('📢 Announcement popup broadcasted live! Closing in 1s to view...');
+        setTimeout(() => onClose(), 1200);
+      } else if (!targetMaintenance && config.maintenanceMode) {
+        setSaveSuccess('🟢 Portal is now LIVE for all visitors!');
+        setTimeout(() => onClose(), 1200);
+      } else {
+        setSaveSuccess('⚡ Broadcasted LIVE to ALL visitors instantly!');
+        setTimeout(() => setSaveSuccess(null), 3000);
+      }
     } else {
       setLoginError('Failed to broadcast to server. Please retry.');
       setTimeout(() => setLoginError(null), 3500);
@@ -215,7 +227,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Passcode (Default: <code className="text-amber-400 font-mono">khushi</code>)
+                Secret Master Passcode
               </label>
               <div className="relative">
                 <input
@@ -227,7 +239,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({
                   spellCheck={false}
                   value={passwordInput}
                   onChange={(e) => setPasswordInput(e.target.value)}
-                  placeholder="khushi"
+                  placeholder="••••••••"
                   className="w-full bg-slate-950 text-white text-sm px-3.5 py-2.5 rounded-xl border border-slate-700 focus:outline-none focus:border-amber-400 font-mono tracking-wider"
                 />
                 <button

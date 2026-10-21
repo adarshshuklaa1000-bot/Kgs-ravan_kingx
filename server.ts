@@ -162,7 +162,7 @@ app.post('/api/admin/verify-login', (req, res) => {
       }
     });
   } else {
-    res.status(401).json({ success: false, message: 'गलत पासवर्ड! (Incorrect Passcode. Default: khushi)' });
+    res.status(401).json({ success: false, message: 'गलत पासवर्ड! (Incorrect Passcode)' });
   }
 });
 

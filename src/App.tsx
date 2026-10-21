@@ -58,18 +58,24 @@ export default function App() {
     }
   });
 
-  // Admin remote real-time config state
-  const [adminConfig, setAdminConfig] = useState<AdminConfig>({
-    maintenanceMode: false,
-    maintenanceMessage: 'System maintenance in progress. Please check back shortly.',
-    announcement: {
-      enabled: false,
-      id: '1',
-      title: 'Khan Sir Special Notice 📢',
-      message: 'Join our official Telegram community for daily notes and live updates!',
-      badge: 'OFFICIAL ALERT'
-    },
-    telegramUrl: 'https://t.me/+g42TEGdV8HE3NWM1'
+  // Admin remote real-time config state with persistent cache
+  const [adminConfig, setAdminConfig] = useState<AdminConfig>(() => {
+    try {
+      const cached = localStorage.getItem('kgs_cached_admin_config');
+      if (cached) return JSON.parse(cached);
+    } catch {}
+    return {
+      maintenanceMode: false,
+      maintenanceMessage: 'System maintenance in progress. Please check back shortly.',
+      announcement: {
+        enabled: false,
+        id: '1',
+        title: 'Important Official Notice 📢',
+        message: 'Join our official Telegram community for daily notes and live updates!',
+        badge: 'OFFICIAL ALERT'
+      },
+      telegramUrl: 'https://t.me/+g42TEGdV8HE3NWM1'
+    };
   });
 
   // Center screen announcement state
@@ -156,27 +162,17 @@ export default function App() {
     // Apply updated remote config immediately to all visitors
     const applyRemoteConfig = (data: any) => {
       if (!data || !isMounted) return;
-      setAdminConfig((prev) => {
-        // Check if values actually changed to avoid unnecessary re-renders
-        if (
-          prev.maintenanceMode === data.maintenanceMode &&
-          prev.maintenanceMessage === data.maintenanceMessage &&
-          prev.announcement?.enabled === data.announcement?.enabled &&
-          prev.announcement?.id === data.announcement?.id &&
-          prev.announcement?.message === data.announcement?.message &&
-          prev.announcement?.title === data.announcement?.title &&
-          prev.telegramUrl === data.telegramUrl
-        ) {
-          return prev;
-        }
-        return {
-          maintenanceMode: Boolean(data.maintenanceMode),
-          maintenanceMessage: data.maintenanceMessage || 'System maintenance in progress.',
-          announcement: data.announcement || { enabled: false, id: '1', title: '', message: '', badge: 'NOTICE' },
-          telegramUrl: data.telegramUrl || 'https://t.me/+g42TEGdV8HE3NWM1',
-          updatedAt: data.updatedAt
-        };
-      });
+      const formatted: AdminConfig = {
+        maintenanceMode: Boolean(data.maintenanceMode),
+        maintenanceMessage: data.maintenanceMessage || 'System maintenance in progress. Portal will resume shortly.',
+        announcement: data.announcement || { enabled: false, id: '1', title: '', message: '', badge: 'NOTICE' },
+        telegramUrl: data.telegramUrl || 'https://t.me/+g42TEGdV8HE3NWM1',
+        updatedAt: data.updatedAt
+      };
+      setAdminConfig(formatted);
+      try {
+        localStorage.setItem('kgs_cached_admin_config', JSON.stringify(formatted));
+      } catch {}
     };
 
     // 1. Instant initial fetch
@@ -295,7 +291,25 @@ export default function App() {
         })
       });
       if (res.ok) {
-        await fetchAdminConfig();
+        const json = await res.json();
+        const savedConfig: AdminConfig = json?.config || updates;
+        setAdminConfig(savedConfig);
+        try {
+          localStorage.setItem('kgs_cached_admin_config', JSON.stringify(savedConfig));
+        } catch {}
+
+        // Reset dismissed announcements so the announcement is immediately visible
+        if (savedConfig.announcement?.enabled) {
+          setDismissedAnnouncements([]);
+        }
+
+        // Broadcast across tabs
+        try {
+          const bc = new BroadcastChannel('kgs_portal_admin_sync');
+          bc.postMessage(savedConfig);
+          bc.close();
+        } catch {}
+
         return true;
       }
     } catch (err) {
@@ -378,12 +392,13 @@ export default function App() {
         <MaintenanceScreen
           message={adminConfig.maintenanceMessage}
           onLogoTap={handleLogoTap}
+          onOpenAdmin={() => setIsSecretAdminOpen(true)}
           onRefresh={fetchAdminConfig}
         />
       )}
 
-      {/* 3. Mandatory Telegram Join Gate with Automatic Verification */}
-      {!showSplash && !isTelegramVerified && (
+      {/* 3. Mandatory Telegram Join Gate with Automatic Verification (Only when portal is open) */}
+      {!showSplash && !adminConfig.maintenanceMode && !isTelegramVerified && (
         <TelegramGateModal
           isOpen={true}
           telegramUrl={adminConfig.telegramUrl || 'https://t.me/+g42TEGdV8HE3NWM1'}
@@ -391,8 +406,8 @@ export default function App() {
         />
       )}
 
-      {/* 4. Screen-Center Animated Announcement Popup */}
-      {!showSplash && isAnnouncementActive && (
+      {/* 4. Screen-Center Animated Announcement Popup (Only when portal is open) */}
+      {!showSplash && !adminConfig.maintenanceMode && isAnnouncementActive && (
         <ScreenCenterAnnouncementModal
           isOpen={true}
           announcement={adminConfig.announcement}

@@ -5,12 +5,14 @@ interface MaintenanceScreenProps {
   message: string;
   onLogoTap: () => void;
   onRefresh: () => void;
+  onOpenAdmin?: () => void;
 }
 
 export const MaintenanceScreen: React.FC<MaintenanceScreenProps> = ({
   message,
   onLogoTap,
-  onRefresh
+  onRefresh,
+  onOpenAdmin
 }) => {
   return (
     <div className="fixed inset-0 z-[9998] bg-slate-950 flex flex-col items-center justify-between p-6 text-center select-none">
@@ -76,11 +78,11 @@ export const MaintenanceScreen: React.FC<MaintenanceScreenProps> = ({
           <span className="text-amber-400 font-black">kingX👑</span>
         </p>
         <button
-          onClick={onLogoTap}
-          className="w-6 h-6 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-600 hover:text-amber-400 opacity-30 hover:opacity-100 transition-opacity cursor-pointer"
-          title="Admin Unlock"
+          onClick={onOpenAdmin || onLogoTap}
+          className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 hover:text-amber-400 opacity-40 hover:opacity-100 transition-opacity cursor-pointer active:scale-90"
+          title="Admin Unlock Controller"
         >
-          <span className="text-[10px]">🔒</span>
+          <span className="text-xs">🔒</span>
         </button>
       </div>
     </div>
