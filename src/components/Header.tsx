@@ -1,22 +1,21 @@
-import React from 'react';
 import { 
   Search, 
   Sparkles, 
   RefreshCw,
   GraduationCap,
-  Award,
+  Heart,
   Send
 } from 'lucide-react';
 
 interface HeaderProps {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
-  activeTab: 'courses' | 'tests' | 'about';
-  setActiveTab: (tab: 'courses' | 'tests' | 'about') => void;
+  activeTab: 'courses' | 'favourites' | 'about';
+  setActiveTab: (tab: 'courses' | 'favourites' | 'about') => void;
   onRefresh: () => void;
   isLoading: boolean;
   coursesCount: number;
-  testsCount: number;
+  favouritesCount: number;
   onLogoTap: () => void;
   onOpenTelegram: () => void;
 }
@@ -29,7 +28,7 @@ export const Header: React.FC<HeaderProps> = ({
   onRefresh,
   isLoading,
   coursesCount,
-  testsCount,
+  favouritesCount,
   onLogoTap,
   onOpenTelegram
 }) => {
@@ -137,15 +136,15 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           <button
-            onClick={() => setActiveTab('tests')}
+            onClick={() => setActiveTab('favourites')}
             className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer truncate ${
-              activeTab === 'tests'
-                ? 'bg-amber-500 text-slate-950 shadow-sm'
+              activeTab === 'favourites'
+                ? 'bg-rose-600 text-white shadow-sm'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            <Award className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">Tests ({testsCount})</span>
+            <Heart className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'favourites' ? 'fill-current' : ''}`} />
+            <span className="truncate">Favourites ({favouritesCount})</span>
           </button>
 
           <button

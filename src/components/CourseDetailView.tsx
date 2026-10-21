@@ -25,7 +25,8 @@ import {
   BookOpen,
   FolderOpen,
   Search,
-  Download
+  Download,
+  Heart
 } from 'lucide-react';
 
 interface CourseDetailViewProps {
@@ -34,6 +35,8 @@ interface CourseDetailViewProps {
   onPlayVideo: (videoItem: ApiVideoItem, course: ApiCourseItem) => void;
   onOpenPdf: (pdf: { title: string; url: string }, courseTitle?: string) => void;
   onLogoTap?: () => void;
+  isFavourite?: boolean;
+  onToggleFavourite?: (course: ApiCourseItem) => void;
 }
 
 export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
@@ -41,7 +44,9 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
   onBack,
   onPlayVideo,
   onOpenPdf,
-  onLogoTap
+  onLogoTap,
+  isFavourite = false,
+  onToggleFavourite
 }) => {
   const [details, setDetails] = useState<ApiCourseDetails | null>(null);
   const [loadingDetails, setLoadingDetails] = useState<boolean>(true);
@@ -111,12 +116,27 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
           <span>{selectedSubject ? 'All Subjects' : 'All Batches'}</span>
         </button>
 
-        <div 
-          onClick={onLogoTap}
-          className="text-xs text-slate-300 truncate max-w-[210px] font-bold cursor-pointer"
-          title="Khan Global Studies"
-        >
-          {selectedSubject ? selectedSubject.name : course.title}
+        <div className="flex items-center gap-2">
+          <div 
+            onClick={onLogoTap}
+            className="text-xs text-slate-300 truncate max-w-[170px] font-bold cursor-pointer"
+            title="Khan Global Studies"
+          >
+            {selectedSubject ? selectedSubject.name : course.title}
+          </div>
+          {onToggleFavourite && (
+            <button
+              onClick={() => onToggleFavourite(course)}
+              className={`p-1.5 rounded-full backdrop-blur-md transition-all cursor-pointer shrink-0 ${
+                isFavourite
+                  ? 'bg-rose-600 text-white shadow-md shadow-rose-600/40'
+                  : 'bg-slate-900 border border-slate-700 text-slate-400 hover:text-rose-400'
+              }`}
+              title={isFavourite ? 'Saved in Favourites' : 'Save to Favourites'}
+            >
+              <Heart className={`w-3.5 h-3.5 ${isFavourite ? 'fill-current' : ''}`} />
+            </button>
+          )}
         </div>
       </div>
 

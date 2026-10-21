@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/admin/(.*)",
+      "destination": "/api/admin/$1"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "https://apicf.udemylover.workers.dev/api/$1"
     }

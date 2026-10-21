@@ -67,13 +67,21 @@ export const MaintenanceScreen: React.FC<MaintenanceScreenProps> = ({
         </div>
       </div>
 
-      {/* Mandatory Signature Footer */}
-      <div className="text-center py-2">
+      {/* Mandatory Signature Footer with discreet admin lock button */}
+      <div className="w-full max-w-md flex items-center justify-between py-2">
+        <div className="w-6"></div>
         <p className="text-xs tracking-wider">
           <span className="text-slate-400">Powered by </span>
           <span className="text-white font-black">ravan_</span>
           <span className="text-amber-400 font-black">kingX👑</span>
         </p>
+        <button
+          onClick={onLogoTap}
+          className="w-6 h-6 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-600 hover:text-amber-400 opacity-30 hover:opacity-100 transition-opacity cursor-pointer"
+          title="Admin Unlock"
+        >
+          <span className="text-[10px]">🔒</span>
+        </button>
       </div>
     </div>
   );

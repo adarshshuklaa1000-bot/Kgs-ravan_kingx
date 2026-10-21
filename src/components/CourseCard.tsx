@@ -5,19 +5,24 @@ import {
   Calendar, 
   ChevronRight, 
   Sparkles,
-  BookOpen
+  BookOpen,
+  Heart
 } from 'lucide-react';
 
 interface CourseCardProps {
   course: ApiCourseItem;
   onSelectCourse: (course: ApiCourseItem) => void;
   onQuickPlay: (course: ApiCourseItem) => void;
+  isFavourite?: boolean;
+  onToggleFavourite?: (course: ApiCourseItem) => void;
 }
 
 export const CourseCard: React.FC<CourseCardProps> = ({
   course,
   onSelectCourse,
-  onQuickPlay
+  onQuickPlay,
+  isFavourite = false,
+  onToggleFavourite
 }) => {
   // Determine English category badge
   const getCategoryBadge = (title: string) => {
@@ -51,15 +56,35 @@ export const CourseCard: React.FC<CourseCardProps> = ({
         />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent"></div>
 
-        {/* Top Badges */}
-        <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-2">
+        {/* Top Badges & Favourite Toggle */}
+        <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-2 z-10">
           <span className="bg-slate-900/90 backdrop-blur-md text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-400/30 flex items-center gap-1 shadow">
             <Sparkles className="w-3 h-3 text-amber-400" />
             {getCategoryBadge(course.title)}
           </span>
-          <span className="bg-emerald-600/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow uppercase">
-            LIVE
-          </span>
+
+          <div className="flex items-center gap-1.5">
+            <span className="bg-emerald-600/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow uppercase">
+              LIVE
+            </span>
+            {onToggleFavourite && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleFavourite(course);
+                }}
+                className={`w-7 h-7 rounded-full flex items-center justify-center backdrop-blur-md transition-all shadow cursor-pointer active:scale-90 ${
+                  isFavourite
+                    ? 'bg-rose-600 text-white shadow-rose-600/50 scale-105'
+                    : 'bg-slate-900/80 text-slate-300 hover:text-rose-400 hover:bg-slate-900 border border-slate-700/60'
+                }`}
+                title={isFavourite ? 'Remove from Favourites' : 'Save to Favourites'}
+              >
+                <Heart className={`w-3.5 h-3.5 ${isFavourite ? 'fill-current text-white' : ''}`} />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Course ID */}

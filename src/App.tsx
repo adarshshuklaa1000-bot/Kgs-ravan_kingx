@@ -7,7 +7,6 @@ import {
 } from './services/api';
 import { Header } from './components/Header';
 import { CourseCard } from './components/CourseCard';
-import { TestSeriesCard } from './components/TestSeriesCard';
 import { CourseDetailView } from './components/CourseDetailView';
 import { VideoPlayerModal } from './components/VideoPlayerModal';
 import { PdfViewerModal } from './components/PdfViewerModal';
@@ -30,7 +29,8 @@ import {
   CheckCircle2,
   ChevronDown,
   User,
-  Layers
+  Layers,
+  Heart
 } from 'lucide-react';
 
 interface AdminConfig {
@@ -80,11 +80,9 @@ export default function App() {
   const lastTapTimeRef = useRef<number>(0);
   const [isSecretAdminOpen, setIsSecretAdminOpen] = useState<boolean>(false);
 
-  // Live Courses & Tests state - ALL 956 BATCHES
+  // Live Courses state - ALL 956 BATCHES
   const [courses, setCourses] = useState<ApiCourseItem[]>([]);
-  const [tests, setTests] = useState<ApiTestItem[]>([]);
   const [totalCourses, setTotalCourses] = useState<number>(0);
-  const [totalTests, setTotalTests] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -92,10 +90,33 @@ export default function App() {
   const [visibleLimit, setVisibleLimit] = useState<number>(36);
 
   // Navigation & Filter state
-  const [activeTab, setActiveTab] = useState<'courses' | 'tests' | 'about'>('courses');
+  const [activeTab, setActiveTab] = useState<'courses' | 'favourites' | 'about'>('courses');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCourse, setSelectedCourse] = useState<ApiCourseItem | null>(null);
+
+  // Favourites state (saved persistently in localStorage)
+  const [favouriteIds, setFavouriteIds] = useState<number[]>(() => {
+    try {
+      const saved = localStorage.getItem('kgs_favourite_batches');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const handleToggleFavourite = (course: ApiCourseItem) => {
+    setFavouriteIds((prev) => {
+      const exists = prev.includes(course.id);
+      const next = exists ? prev.filter((id) => id !== course.id) : [...prev, course.id];
+      try {
+        localStorage.setItem('kgs_favourite_batches', JSON.stringify(next));
+      } catch {
+        // storage fallback
+      }
+      return next;
+    });
+  };
 
   // Modals for Video and PDF
   const [activeVideo, setActiveVideo] = useState<{
@@ -109,23 +130,111 @@ export default function App() {
     courseTitle?: string;
   } | null>(null);
 
-  // Poll Admin Config from server for real-time synchronization across all visitors
-  const fetchAdminConfig = async () => {
+  // Real-time synchronization engine across all visitors
+  const fetchAdminConfig = async (): Promise<AdminConfig | null> => {
     try {
-      const res = await fetch('/api/admin/config');
+      const res = await fetch('/api/admin/config', {
+        cache: 'no-store',
+        headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' }
+      });
       if (res.ok) {
         const data = await res.json();
         setAdminConfig(data);
+        return data;
       }
     } catch {
       // Local fallback
     }
+    return null;
   };
 
   useEffect(() => {
-    fetchAdminConfig();
-    const interval = setInterval(fetchAdminConfig, 3500);
-    return () => clearInterval(interval);
+    let sse: EventSource | null = null;
+    let pollTimer: any = null;
+    let isMounted = true;
+
+    // Apply updated remote config immediately to all visitors
+    const applyRemoteConfig = (data: any) => {
+      if (!data || !isMounted) return;
+      setAdminConfig((prev) => {
+        // Check if values actually changed to avoid unnecessary re-renders
+        if (
+          prev.maintenanceMode === data.maintenanceMode &&
+          prev.maintenanceMessage === data.maintenanceMessage &&
+          prev.announcement?.enabled === data.announcement?.enabled &&
+          prev.announcement?.id === data.announcement?.id &&
+          prev.announcement?.message === data.announcement?.message &&
+          prev.announcement?.title === data.announcement?.title &&
+          prev.telegramUrl === data.telegramUrl
+        ) {
+          return prev;
+        }
+        return {
+          maintenanceMode: Boolean(data.maintenanceMode),
+          maintenanceMessage: data.maintenanceMessage || 'System maintenance in progress.',
+          announcement: data.announcement || { enabled: false, id: '1', title: '', message: '', badge: 'NOTICE' },
+          telegramUrl: data.telegramUrl || 'https://t.me/+g42TEGdV8HE3NWM1',
+          updatedAt: data.updatedAt
+        };
+      });
+    };
+
+    // 1. Instant initial fetch
+    fetchAdminConfig().then(applyRemoteConfig);
+
+    // 2. Real-Time Server-Sent Events (SSE) Stream (<50ms delivery to all connected visitors)
+    try {
+      sse = new EventSource('/api/admin/stream');
+      sse.addEventListener('config_update', (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          applyRemoteConfig(payload);
+        } catch (e) {
+          console.error('Error parsing SSE config update:', e);
+        }
+      });
+      sse.onerror = () => {
+        // SSE automatically reconnects
+      };
+    } catch (e) {
+      console.warn('SSE not supported on this browser, relying on fast polling', e);
+    }
+
+    // 3. Fast fallback polling every 2 seconds
+    pollTimer = setInterval(async () => {
+      const cfg = await fetchAdminConfig();
+      if (cfg) applyRemoteConfig(cfg);
+    }, 2000);
+
+    // 4. Instant sync on tab visibility or window focus
+    const onVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        const cfg = await fetchAdminConfig();
+        if (cfg) applyRemoteConfig(cfg);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('focus', onVisibilityChange);
+
+    // 5. Cross-tab instant synchronization via BroadcastChannel
+    let broadcastChannel: BroadcastChannel | null = null;
+    try {
+      broadcastChannel = new BroadcastChannel('kgs_portal_admin_sync');
+      broadcastChannel.onmessage = (event) => {
+        if (event.data) applyRemoteConfig(event.data);
+      };
+    } catch {
+      // BroadcastChannel unavailable
+    }
+
+    return () => {
+      isMounted = false;
+      if (sse) sse.close();
+      if (pollTimer) clearInterval(pollTimer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('focus', onVisibilityChange);
+      if (broadcastChannel) broadcastChannel.close();
+    };
   }, []);
 
   // Fetch ALL 956 batches on start!
@@ -133,19 +242,11 @@ export default function App() {
     setIsLoading(true);
     setError(null);
     try {
-      const [coursesResult, testsResult] = await Promise.all([
-        kgsApi.getCourses(1, 1000), // Loads all 956 batches in 1 request
-        kgsApi.getTests(1)
-      ]);
+      const coursesResult = await kgsApi.getCourses(1, 1000); // Loads all 956 batches in 1 request
 
       if (coursesResult && coursesResult.items && coursesResult.items.length > 0) {
         setCourses(coursesResult.items);
         setTotalCourses(coursesResult.total || coursesResult.items.length || 956);
-      }
-
-      if (testsResult && testsResult.items) {
-        setTests(testsResult.items);
-        setTotalTests(testsResult.total || testsResult.items.length);
       }
     } catch (err: any) {
       console.error('Error fetching live KGS data:', err);
@@ -246,10 +347,13 @@ export default function App() {
 
   const displayedCourses = filteredCourses.slice(0, visibleLimit);
 
-  const filteredTests = tests.filter((test) => {
+  // Filter user's saved favourite batches
+  const favouriteCourses = courses.filter((c) => favouriteIds.includes(c.id));
+  const filteredFavourites = favouriteCourses.filter((c) => {
     return (
-      test.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      test.id.toString().includes(searchQuery.toLowerCase())
+      c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.id.toString().includes(searchQuery.toLowerCase()) ||
+      c.slug.toLowerCase().includes(searchQuery.toLowerCase())
     );
   });
 
@@ -320,7 +424,7 @@ export default function App() {
           onRefresh={loadInitialData}
           isLoading={isLoading}
           coursesCount={totalCourses || courses.length}
-          testsCount={totalTests || tests.length}
+          favouritesCount={favouriteIds.length}
           onLogoTap={handleLogoTap}
           onOpenTelegram={() => window.open(adminConfig.telegramUrl || 'https://t.me/+g42TEGdV8HE3NWM1', '_blank')}
         />
@@ -337,6 +441,8 @@ export default function App() {
               setActivePdf({ ...pdf, courseTitle });
             }}
             onLogoTap={handleLogoTap}
+            isFavourite={favouriteIds.includes(selectedCourse.id)}
+            onToggleFavourite={handleToggleFavourite}
           />
         ) : (
           <main className="flex-1 p-3 space-y-4 pb-24">
@@ -464,6 +570,8 @@ export default function App() {
                         course={course}
                         onSelectCourse={(c) => setSelectedCourse(c)}
                         onQuickPlay={handleQuickPlay}
+                        isFavourite={favouriteIds.includes(course.id)}
+                        onToggleFavourite={handleToggleFavourite}
                       />
                     ))}
 
@@ -507,36 +615,86 @@ export default function App() {
               </div>
             )}
 
-            {/* TAB 2: TEST SERIES */}
-            {activeTab === 'tests' && (
+            {/* TAB 2: MY FAVOURITE BATCHES */}
+            {activeTab === 'favourites' && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between px-1">
-                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                    Official Online Test Series
-                  </h3>
-                  <span className="text-[11px] text-slate-400 font-mono">
-                    Total: {filteredTests.length}
+                  <div className="flex items-center gap-1.5">
+                    <Heart className="w-4 h-4 text-rose-500 fill-current animate-pulse" />
+                    <h3 className="text-xs font-black text-white uppercase tracking-wider">
+                      My Favourite Batches
+                    </h3>
+                  </div>
+                  <span className="text-[11px] text-rose-400 font-mono font-bold bg-rose-500/10 px-2.5 py-0.5 rounded-full border border-rose-500/30">
+                    Saved: {favouriteCourses.length}
                   </span>
                 </div>
 
-                {isLoading && (
-                  <div className="py-20 text-center text-slate-400 flex flex-col items-center justify-center gap-2">
-                    <RefreshCw className="w-7 h-7 text-amber-500 animate-spin" />
-                    <p className="text-xs">Loading test series...</p>
+                {/* If user has saved favourite batches */}
+                {filteredFavourites.length > 0 && (
+                  <div className="space-y-3">
+                    {filteredFavourites.map((course) => (
+                      <CourseCard
+                        key={course.id}
+                        course={course}
+                        onSelectCourse={(c) => setSelectedCourse(c)}
+                        onQuickPlay={handleQuickPlay}
+                        isFavourite={true}
+                        onToggleFavourite={handleToggleFavourite}
+                      />
+                    ))}
                   </div>
                 )}
 
-                {!isLoading && (
-                  <div className="space-y-3">
-                    {filteredTests.map((test) => (
-                      <TestSeriesCard
-                        key={test.id}
-                        test={test}
-                        onOpenTest={(t) => {
-                          window.open(`https://khanglobalstudies.com/test-series/${t.slug}`, '_blank');
+                {/* If user has saved batches, but search filter yields 0 */}
+                {favouriteCourses.length > 0 && filteredFavourites.length === 0 && (
+                  <div className="p-10 text-center bg-slate-900 rounded-2xl border border-slate-800">
+                    <Heart className="w-10 h-10 text-slate-600 mx-auto mb-2" />
+                    <h4 className="text-sm font-bold text-white">No matching favourites</h4>
+                    <p className="text-xs text-slate-400 mt-1">
+                      No saved batch matches "{searchQuery}".
+                    </p>
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="mt-3 px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl cursor-pointer"
+                    >
+                      Clear Search
+                    </button>
+                  </div>
+                )}
+
+                {/* If user has NO favourite batches saved yet */}
+                {favouriteCourses.length === 0 && (
+                  <div className="py-14 px-6 text-center bg-slate-900/80 rounded-3xl border border-slate-800 space-y-4">
+                    <div className="relative mx-auto w-20 h-20 rounded-3xl bg-rose-500/10 border-2 border-rose-500/30 flex items-center justify-center text-rose-500 shadow-[0_0_40px_rgba(244,63,94,0.25)]">
+                      <Heart className="w-10 h-10 text-rose-500 fill-rose-500/20 animate-pulse" />
+                      <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-600 text-white text-[10px] flex items-center justify-center font-bold">
+                        +
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5 max-w-xs mx-auto">
+                      <h4 className="text-base font-black text-white tracking-tight">
+                        No Favourite Batches Yet
+                      </h4>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        Save your preferred Khan Sir batches here for quick 1-tap access! Simply tap the heart (<span className="text-rose-400 font-bold">❤️</span>) icon on any batch card.
+                      </p>
+                    </div>
+
+                    <div className="pt-2">
+                      <button
+                        onClick={() => {
+                          setActiveTab('courses');
+                          setCategoryFilter('all');
+                          setSearchQuery('');
                         }}
-                      />
-                    ))}
+                        className="py-2.5 px-6 bg-gradient-to-r from-rose-600 to-amber-500 hover:from-rose-500 text-white font-black text-xs rounded-xl shadow-lg transition-all active:scale-95 cursor-pointer inline-flex items-center gap-2"
+                      >
+                        <BookOpen className="w-4 h-4" />
+                        <span>Explore All Batches Now</span>
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -585,15 +743,22 @@ export default function App() {
 
           <button
             onClick={() => {
-              setActiveTab('tests');
+              setActiveTab('favourites');
               setSelectedCourse(null);
             }}
-            className={`flex flex-col items-center gap-1 cursor-pointer transition-colors ${
-              activeTab === 'tests' ? 'text-amber-400' : 'text-slate-400'
+            className={`flex flex-col items-center gap-1 cursor-pointer transition-colors relative ${
+              activeTab === 'favourites' ? 'text-rose-500 font-black' : 'text-slate-400 hover:text-white'
             }`}
           >
-            <Award className="w-5 h-5" />
-            <span className="text-[10px] font-bold">Test Series</span>
+            <div className="relative">
+              <Heart className={`w-5 h-5 ${activeTab === 'favourites' ? 'fill-current text-rose-500' : ''}`} />
+              {favouriteIds.length > 0 && (
+                <span className="absolute -top-1.5 -right-2.5 px-1 py-0.2 text-[8px] font-mono font-black bg-rose-600 text-white rounded-full min-w-[14px] text-center shadow">
+                  {favouriteIds.length}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] font-bold">Favourites</span>
           </button>
 
           <button
